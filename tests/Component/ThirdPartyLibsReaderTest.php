@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 class ThirdPartyLibsReaderTest extends TestCase
 {
 
-    public function testGetLocationsRelative()
+    public function testGetLocationsRelative(): void
     {
         $reader = new ThirdPartyLibsReader();
         $result = $reader->getLocationsRelative(__DIR__ . '/fixture/test-plugin-1');
