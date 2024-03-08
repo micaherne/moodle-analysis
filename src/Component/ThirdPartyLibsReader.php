@@ -13,7 +13,7 @@ use function simplexml_load_file;
 class ThirdPartyLibsReader
 {
 
-    private const THIRDPARTYLIBS_XML = 'thirdpartylibs.xml';
+    private const string THIRDPARTYLIBS_XML = 'thirdpartylibs.xml';
 
     /**
      * @param string $componentDirectory full path to the component directory

@@ -10,11 +10,21 @@ use stdClass;
 
 /**
  * Finds all the components in a Moodle codebase. This is a simplistic implementation of what
- * core_component does and is intended for analysis where it's not appropriate to try and load
+ * core_component does and is intended for static analysis where it's not appropriate to try and load
  * core_component.
  */
 class ComponentsFinder
 {
+
+    public function __construct(private readonly string $moodleRoot)
+    {
+        if (!is_dir($this->moodleRoot)) {
+            throw new InvalidArgumentException("Moodle root directory not found: $this->moodleRoot");
+        }
+        if (!file_exists($this->moodleRoot . '/lib/components.json')) {
+            throw new InvalidArgumentException("Components file not found in $this->moodleRoot/lib/components.json");
+        }
+    }
 
     /**
      * Directories to ignore when looking for components.
@@ -50,12 +60,15 @@ class ComponentsFinder
     /**
      * Get all the components in a Moodle codebase.
      *
+     * @return Generator<string, string> A generator that yields the component name and the directory it's in.
+     *
      * @throws Exception if unable to find or read the components.json files
      */
-    public function getComponents(string $moodleDirectory): \Generator {
-        $mainComponentsFile = $moodleDirectory . '/lib/components.json';
+    public function getComponents(): Generator
+    {
+        $mainComponentsFile = $this->moodleRoot . '/lib/components.json';
         if (!is_file($mainComponentsFile)) {
-            throw new InvalidArgumentException("Components file not found in $moodleDirectory/lib/components.json");
+            throw new InvalidArgumentException("Components file not found in {$this->moodleRoot}/lib/components.json");
         }
 
         // Core is a special case.
@@ -70,7 +83,7 @@ class ComponentsFinder
 
         $pathsWithSubPlugins = [];
         foreach ($components->plugintypes as $plugintype => $plugintypeDirectory) {
-            $pluginTypeDirAbsolute = $moodleDirectory . '/' . $plugintypeDirectory;
+            $pluginTypeDirAbsolute = $this->moodleRoot . '/' . $plugintypeDirectory;
             foreach (new DirectoryIterator($pluginTypeDirAbsolute) as $directory) {
                 if ($directory->isDot()) {
                     continue;
@@ -79,7 +92,10 @@ class ComponentsFinder
                     continue;
                 }
                 $directoryName = $directory->getFilename();
-                if (array_key_exists($directoryName, self::$ignoreddirs) && !($plugintype === 'auth' && $directoryName === 'db')) {
+                if (array_key_exists(
+                        $directoryName,
+                        self::$ignoreddirs
+                    ) && !($plugintype === 'auth' && $directoryName === 'db')) {
                     continue;
                 }
                 $pluginDirectory = $plugintypeDirectory . '/' . $directoryName;
@@ -92,24 +108,25 @@ class ComponentsFinder
         }
 
         foreach ($pathsWithSubPlugins as $pathWithSubPlugins) {
-            foreach ($this->getSubplugins($pathWithSubPlugins, $moodleDirectory) as $subplugin => $subpluginDir) {
+            foreach ($this->getSubplugins($pathWithSubPlugins) as $subplugin => $subpluginDir) {
                 yield $subplugin => $subpluginDir;
             }
         }
     }
 
     /**
+     * @return Generator<string, string> A generator that yields the subplugin name and the directory it's in.
      * @throws Exception
      */
-    public function getSubplugins(string $pathWithSubPlugins, string $moodleDirectory): \Generator
+    public function getSubplugins(string $pathWithSubPlugins): \Generator
     {
-        $subpluginsJsonFile = $moodleDirectory . '/' . $pathWithSubPlugins . '/db/subplugins.json';
+        $subpluginsJsonFile = $this->moodleRoot . '/' . $pathWithSubPlugins . '/db/subplugins.json';
         if (!is_file($subpluginsJsonFile)) {
             return;
         }
         $components = $this->readComponentsJsonFile($subpluginsJsonFile);
         foreach ($components->plugintypes as $pluginType => $pluginTypeDirectory) {
-            $pluginTypeDirAbsolute = $moodleDirectory . '/' . $pluginTypeDirectory;
+            $pluginTypeDirAbsolute = $this->moodleRoot . '/' . $pluginTypeDirectory;
             foreach (new DirectoryIterator($pluginTypeDirAbsolute) as $directory) {
                 if ($directory->isDot()) {
                     continue;
@@ -118,10 +135,22 @@ class ComponentsFinder
                     continue;
                 }
                 $directoryName = $directory->getFilename();
-                if (array_key_exists($directoryName, self::$ignoreddirs) && !($pluginType === 'auth' && $directoryName === 'db')) {
+                if (array_key_exists(
+                        $directoryName,
+                        self::$ignoreddirs
+                    ) && !($pluginType === 'auth' && $directoryName === 'db')) {
                     continue;
                 }
                 yield $pluginType . '_' . $directoryName => $pluginTypeDirectory . '/' . $directoryName;
+            }
+        }
+    }
+
+    public function getComponentsWithPath(string $path): Generator
+    {
+        foreach ($this->getComponents() as $component => $componentPath) {
+            if (file_exists($this->moodleRoot . '/' . $componentPath . '/' . ltrim($path, '/'))) {
+                yield $component => $path . '/' . $componentPath;
             }
         }
     }
