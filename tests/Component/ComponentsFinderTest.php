@@ -1,13 +1,10 @@
 <?php
 
-namespace Component;
+namespace MoodleAnalysisUtils\Component;
 
-use Composer\Autoload\ClassLoader;
-use MoodleAnalysisUtils\Component\ComponentsFinder;
+use MoodleAnalysisUtils\MoodleCodebaseAware;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
-use RuntimeException;
 
 use function PHPUnit\Framework\assertArrayHasKey;
 use function PHPUnit\Framework\assertCount;
@@ -15,19 +12,17 @@ use function PHPUnit\Framework\assertCount;
 #[CoversClass(ComponentsFinder::class)]
 class ComponentsFinderTest extends TestCase
 {
-    private ComponentsFinder $componentsFinder;
+    use MoodleCodebaseAware;
 
-    private const string MOODLE_PATH_CONST = 'MOODLE_ANALYSIS_UTILS_MOODLE_433_PATH';
+    private ComponentsFinder $componentsFinder;
 
     #[\Override]
     protected function setUp(): void
     {
-        if (defined(self::MOODLE_PATH_CONST) && constant(self::MOODLE_PATH_CONST) !== 'false'
-        && is_dir(constant(self::MOODLE_PATH_CONST))) {
-            $this->componentsFinder = new ComponentsFinder(constant(self::MOODLE_PATH_CONST));
-            return;
+        if (!$this->isMoodleCodebaseAvailable()) {
+            $this->markTestSkipped("Moodle path not defined or not found");
         }
-        $this->markTestSkipped("Moodle path not defined or not found");
+        $this->componentsFinder = new ComponentsFinder(constant(self::MOODLE_PATH_CONST));
     }
 
     public function testGetSubplugins(): void

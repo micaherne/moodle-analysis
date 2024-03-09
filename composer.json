@@ -15,6 +15,11 @@
       "MoodleAnalysisUtils\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "MoodleAnalysisUtils\\": "tests/"
+    }
+  },
   "require": {
     "php": "^8.3",
     "ext-simplexml": "*"
