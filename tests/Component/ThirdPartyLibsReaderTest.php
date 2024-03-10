@@ -1,8 +1,8 @@
 <?php
 
-namespace MoodleAnalysisUtils\Component;
+namespace MoodleAnalysis\Component;
 
-use MoodleAnalysisUtils\Component\ThirdPartyLibsReader;
+use MoodleAnalysis\Component\ThirdPartyLibsReader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace MoodleAnalysisUtils\Component;
+namespace MoodleAnalysis\Component;
 
 use ReflectionMethod;
 use RuntimeException;
@@ -123,7 +123,7 @@ final class CoreComponentBridge
         require_once self::$moodleRoot . '/lib/classes/component.php';
 
         /** @phpstan-ignore-next-line core_component is loaded from Moodle */
-        self::$componentReflection = new \ReflectionClass(\core_component::class);
+        self::$componentReflection = new \ReflectionClass('\core_component');
         self::$componentReflection->getMethod('init')->invoke(null);
         self::$classmap = self::toStringMap(self::$componentReflection->getStaticPropertyValue('classmap'));
         self::$classmaprenames = self::toStringMap(self::$componentReflection->getStaticPropertyValue('classmaprenames'));

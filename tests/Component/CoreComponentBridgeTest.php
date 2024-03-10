@@ -1,8 +1,8 @@
 <?php
 
-namespace MoodleAnalysisUtils\Component;
+namespace MoodleAnalysis\Component;
 
-use MoodleAnalysisUtils\MoodleCodebaseAware;
+use MoodleAnalysis\MoodleCodebaseAware;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;

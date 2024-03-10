@@ -1,6 +1,6 @@
 <?php
 
-namespace MoodleAnalysisUtils;
+namespace MoodleAnalysis;
 
 use RuntimeException;
 

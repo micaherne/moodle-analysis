@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace MoodleAnalysisUtils\Component;
+namespace MoodleAnalysis\Component;
 
 use Exception;
 

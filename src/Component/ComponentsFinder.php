@@ -1,6 +1,6 @@
 <?php
 
-namespace MoodleAnalysisUtils\Component;
+namespace MoodleAnalysis\Component;
 
 use DirectoryIterator;
 use Exception;
