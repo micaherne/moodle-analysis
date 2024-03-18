@@ -23,6 +23,7 @@ final class CoreComponentBridge
 
     /** @var array<string, string> */
     private static array $classmaprenames;
+
     private static ReflectionMethod $psrClassloader;
 
     private static string $moodleRoot;
@@ -49,7 +50,9 @@ final class CoreComponentBridge
                 throw new RuntimeException('Core component already loaded with different Moodle root');
             }
             if (!class_exists('\core_component', false)) {
-                throw new RuntimeException('loadCoreComponent() has been called previously but core_component is not loaded');
+                throw new RuntimeException(
+                    'loadCoreComponent() has been called previously but core_component is not loaded'
+                );
             }
             return;
         }
@@ -126,8 +129,20 @@ final class CoreComponentBridge
         self::$componentReflection = new \ReflectionClass('\core_component');
         self::$componentReflection->getMethod('init')->invoke(null);
         self::$classmap = self::toStringMap(self::$componentReflection->getStaticPropertyValue('classmap'));
-        self::$classmaprenames = self::toStringMap(self::$componentReflection->getStaticPropertyValue('classmaprenames'));
+        self::$classmaprenames = self::toStringMap(
+            self::$componentReflection->getStaticPropertyValue('classmaprenames')
+        );
         self::$psrClassloader = self::$componentReflection->getMethod('psr_classloader');
+    }
+
+    public static function registerClassloader(): void {
+        /** @phpstan-ignore-next-line this is a callable */
+        spl_autoload_register('core_component::classloader');
+    }
+
+    public static function unregisterClassloader(): void {
+        /** @phpstan-ignore-next-line this is a callable */
+        spl_autoload_unregister('core_component::classloader');
     }
 
     public static function canAutoloadSymbol(string $symbol): bool
@@ -139,17 +154,35 @@ final class CoreComponentBridge
             ) || (self::$psrClassloader->invoke(null, $symbol) !== false);
     }
 
-    /**
-     * @return array<string> relative directories of the classes directories in Moodle components.
-     */
-    public static function getClassesDirectories(): array
+    public static function loadStandardLibraries(): void
     {
-        $autoloadedDirectories = self::getComponentSubdirectories('classes');
+        global $CFG;
 
-        // TODO: Is it a reasonable assumption that this can be excluded?
-        $autoloadedDirectories[] = 'lib/classes';
+        require_once($CFG->libdir . '/setuplib.php');
 
-        return $autoloadedDirectories;
+        // Rest taken from setup.php
+
+        // Load up standard libraries.
+        require_once($CFG->libdir . '/filterlib.php');       // Functions for filtering test as it is output
+        require_once($CFG->libdir . '/ajax/ajaxlib.php');    // Functions for managing our use of JavaScript and YUI
+        require_once($CFG->libdir . '/weblib.php');          // Functions relating to HTTP and content
+        require_once($CFG->libdir . '/outputlib.php');       // Functions for generating output
+        require_once($CFG->libdir . '/navigationlib.php');   // Class for generating Navigation structure
+        require_once($CFG->libdir . '/dmllib.php');          // Database access
+        require_once($CFG->libdir . '/datalib.php');         // Legacy lib with a big-mix of functions.
+        require_once($CFG->libdir . '/accesslib.php');       // Access control functions
+        require_once($CFG->libdir . '/deprecatedlib.php');   // Deprecated functions included for backward compatibility
+        require_once($CFG->libdir . '/moodlelib.php');       // Other general-purpose functions
+        require_once($CFG->libdir . '/enrollib.php');        // Enrolment related functions
+        require_once($CFG->libdir . '/pagelib.php');         // Library that defines the moodle_page class, used for $PAGE
+        require_once($CFG->libdir . '/blocklib.php');        // Library for controlling blocks
+        require_once($CFG->libdir . '/grouplib.php');        // Groups functions
+        require_once($CFG->libdir . '/sessionlib.php');      // All session and cookie related stuff
+        require_once($CFG->libdir . '/editorlib.php');       // All text editor related functions and classes
+        require_once($CFG->libdir . '/messagelib.php');      // Messagelib functions
+        require_once($CFG->libdir . '/modinfolib.php');      // Cached information on course-module instances
+        require_once($CFG->dirroot . '/cache/lib.php');       // Cache API
+
     }
 
     /**
@@ -175,34 +208,9 @@ final class CoreComponentBridge
     }
 
     /**
-     * @return array<string>
-     */
-    private static function getComponentSubdirectories(string $subDirectoryName): array
-    {
-        $result = [];
-
-        /** @phpstan-ignore-next-line core_component is loaded from Moodle */
-        foreach (\core_component::get_component_list() as $componentList) {
-            foreach ($componentList as $componentDirectory) {
-                if (is_dir($componentDirectory . '/' . $subDirectoryName)) {
-                    $realpath = realpath($componentDirectory . '/' . $subDirectoryName);
-                    if ($realpath === false) {
-                        throw new RuntimeException('Component directory not found');
-                    }
-                    if (!str_starts_with($realpath, self::$moodleRoot)) {
-                        throw new RuntimeException('Component directory does not start with Moodle root');
-                    }
-                    $result[] = substr($realpath, strlen(self::$moodleRoot) + 1);
-                }
-            }
-        }
-        return $result;
-    }
-
-    /**
      * @return array<string, string>
      */
-    public static function getClassmap(): array
+    public static function getClassMap(): array
     {
         return self::$classmap;
     }
@@ -210,11 +218,10 @@ final class CoreComponentBridge
     /**
      * @return array<string, string>
      */
-    public static function getClassmapRenames(): array
+    public static function getClassMapRenames(): array
     {
         return self::$classmaprenames;
     }
-
 
 
 }

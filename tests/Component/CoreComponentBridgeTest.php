@@ -5,6 +5,7 @@ namespace MoodleAnalysis\Component;
 use MoodleAnalysis\MoodleCodebaseAware;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 
@@ -23,16 +24,12 @@ class CoreComponentBridgeTest extends TestCase
         CoreComponentBridge::loadCoreComponent($this->getMoodleCodebasePath());
     }
 
-    public function testGetClassesDirectories(): void
-    {
-        $this->assertNotEmpty(CoreComponentBridge::getClassesDirectories());
-    }
-
     public function testCanAutoloadSymbol(): void
     {
         $this->assertTrue(CoreComponentBridge::canAutoloadSymbol('core\context\module'));
     }
 
+    #[RunInSeparateProcess]
     public function testLoadCoreComponent(): void
     {
         // Ensure that there are no exceptions thrown on trying to load core_component
