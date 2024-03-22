@@ -82,6 +82,7 @@ final class CoreComponentBridge
         ini_set('include_path', $CFG->libdir . '/pear' . PATH_SEPARATOR . ini_get('include_path'));
 
         // A bunch of properties set by setup.php.
+        define('SYSCONTEXTID', 1);
 
         // Make sure there is some database table prefix.
         if (!isset($CFG->prefix)) {
