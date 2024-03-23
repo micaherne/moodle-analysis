@@ -187,6 +187,29 @@ final class CoreComponentBridge
     }
 
     /**
+     * Insert the Moodle vendor autoloader into the autoloader stack.
+     *
+     * This is essential for loading base_testcase.php and advanced_testcase.php.
+     *
+     * It is inserted at the top of the stack, so that it is the first autoloader to be called. Otherwise,
+     * the version of PHPUnit may not be compatible with advanced_testcase etc. for example if you have
+     * run composer in this project without the --no-dev flag.
+     *
+     * @return void
+     */
+    public static function insertMoodleAutoloader(): void {
+        global $CFG;
+
+        $autoloaders = spl_autoload_functions();
+        spl_autoload_unregister($autoloaders[0]);
+        require_once $CFG->dirroot . '/vendor/autoload.php';
+
+        foreach ($autoloaders as $autoloader) {
+            spl_autoload_register($autoloader);
+        }
+    }
+
+    /**
      * Explicitly convert a map to a string map.
      *
      * This is specifically for use with the getStaticPropertyValue() method of ReflectionClass.
