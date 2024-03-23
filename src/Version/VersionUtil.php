@@ -70,6 +70,6 @@ class VersionUtil
      */
     public function versionsInDirectory(string $directory): array
     {
-        return array_map(fn($file): string => basename((string) $file, '.php'), glob($directory . '/*.php') ?: []);
+        return array_map(fn($file): string => basename($file, '.php'), glob($directory . '/*.php') ?: []);
     }
 }
