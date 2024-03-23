@@ -2,6 +2,7 @@
 
 namespace MoodleAnalysis\Component;
 
+use core_h5p\local\library\autoloader;
 use ReflectionMethod;
 use RuntimeException;
 
@@ -221,8 +222,8 @@ final class CoreComponentBridge
         global $CFG;
 
         // Other autoloaders required.
-        if (class_exists(\core_h5p\local\library\autoloader::class)) {
-            \core_h5p\local\library\autoloader::register();
+        if (class_exists(autoloader::class)) {
+            autoloader::register();
         }
 
         self::insertMoodleAutoloader();

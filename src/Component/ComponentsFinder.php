@@ -118,7 +118,7 @@ class ComponentsFinder
      * @return Generator<string, string> A generator that yields the subplugin name and the directory it's in.
      * @throws Exception
      */
-    public function getSubplugins(string $pathWithSubPlugins): \Generator
+    public function getSubplugins(string $pathWithSubPlugins): Generator
     {
         $subpluginsJsonFile = $this->moodleRoot . '/' . $pathWithSubPlugins . '/db/subplugins.json';
         if (!is_file($subpluginsJsonFile)) {
