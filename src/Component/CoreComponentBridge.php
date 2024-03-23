@@ -136,12 +136,14 @@ final class CoreComponentBridge
         self::$psrClassloader = self::$componentReflection->getMethod('psr_classloader');
     }
 
-    public static function registerClassloader(): void {
+    public static function registerClassloader(): void
+    {
         /** @phpstan-ignore-next-line this is a callable */
         spl_autoload_register('core_component::classloader');
     }
 
-    public static function unregisterClassloader(): void {
+    public static function unregisterClassloader(): void
+    {
         /** @phpstan-ignore-next-line this is a callable */
         spl_autoload_unregister('core_component::classloader');
     }
@@ -197,7 +199,8 @@ final class CoreComponentBridge
      *
      * @return void
      */
-    public static function insertMoodleAutoloader(): void {
+    public static function insertMoodleAutoloader(): void
+    {
         global $CFG;
 
         $autoloaders = spl_autoload_functions();
@@ -207,6 +210,42 @@ final class CoreComponentBridge
         foreach ($autoloaders as $autoloader) {
             spl_autoload_register($autoloader);
         }
+    }
+
+    /**
+     * The Moodle classloader as-is will crash out on attempting to load certain classes,
+     * for example where they extend a class that is not autoloaded. (This is not a problem
+     * in Moodle itself, where the relevant includes have been done before the class is
+     * loaded.)
+     */
+    public static function fixClassloader(): void
+    {
+        global $CFG;
+
+        // Other autoloaders required.
+        if (class_exists(\core_h5p\local\library\autoloader::class)) {
+            \core_h5p\local\library\autoloader::register();
+        }
+
+        self::insertMoodleAutoloader();
+
+        foreach (
+            [
+                '/lib/adminlib.php',
+                '/lib/phpunit/classes/base_testcase.php',
+                '/lib/phpunit/classes/advanced_testcase.php',
+                '/enrol/locallib.php',
+                // Required for 4.1 but not 4.2 onwards.
+                '/lib/editor/tinymce/plugins/spellchecker/classes/SpellChecker.php',
+                // Separate autoloader for pdf library.
+                '/mod/assign/feedback/editpdf/fpdi/autoload.php'
+            ] as $file
+        ) {
+            if (file_exists($CFG->dirroot . $file)) {
+                require_once $CFG->dirroot . $file;
+            }
+        }
+
     }
 
     /**
