@@ -24,9 +24,7 @@ class VersionUtil
      *
      * Simple major.minor versions are treated as major.minor.0
      *
-     * @param string $string
      * @param array<string> $options
-     * @return string|null
      */
     public function findClosest(string $string, array $options): ?string
     {
@@ -48,9 +46,7 @@ class VersionUtil
      * is compatible in the case of a simple major.minor version (e.g. 4.2 will return 4.2.5,
      * not 4.2.0, if both are available options).
      *
-     * @param string $string
      * @param array<string> $options
-     * @return string|null
      */
     public function findLatestCompatible(string $string, array $options): ?string
     {
@@ -70,11 +66,10 @@ class VersionUtil
     /**
      * Given a directory of PHP files named after Moodle versions, return an array of the versions.
      *
-     * @param string $directory
      * @return array<string>
      */
     public function versionsInDirectory(string $directory): array
     {
-        return array_map(fn($file) => basename($file, '.php'), glob($directory . '/*.php') ?: []);
+        return array_map(fn($file): string => basename((string) $file, '.php'), glob($directory . '/*.php') ?: []);
     }
 }

@@ -196,8 +196,6 @@ final class CoreComponentBridge
      * It is inserted at the top of the stack, so that it is the first autoloader to be called. Otherwise,
      * the version of PHPUnit may not be compatible with advanced_testcase etc. for example if you have
      * run composer in this project without the --no-dev flag.
-     *
-     * @return void
      */
     public static function insertMoodleAutoloader(): void
     {
