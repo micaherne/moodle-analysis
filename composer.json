@@ -23,7 +23,8 @@
   "require": {
     "php": "^8.3",
     "ext-simplexml": "*",
-    "composer/semver": "^3.4"
+    "composer/semver": "^3.4",
+    "psr/log": "^3.0"
   },
   "require-dev": {
     "phpstan/phpstan": "^1.10",
