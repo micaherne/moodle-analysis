@@ -45,7 +45,7 @@ class CheckClassloader extends Command
             return Command::FAILURE;
         }*/
 
-        $logger->info("Cloning Moodle...");
+        $output->writeln("Cloning Moodle...");
         $cloner = new MoodleCloneProvider();
         $clone = $cloner->cloneMoodle();
 
@@ -77,7 +77,7 @@ class CheckClassloader extends Command
                 $clone->getPath()
             ];
 
-            $logger->debug("Running worker for $tag");
+            $output->writeln("Checking $tag");
             $process = $processHelper->run($output, new Process($commandParts, timeout: null));
             $output->writeln($process->getErrorOutput());
             $output->writeln($process->getOutput());

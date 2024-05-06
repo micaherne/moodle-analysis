@@ -47,7 +47,7 @@ class GenerateClassloaderBootstrap extends Command
             return Command::FAILURE;
         }*/
 
-        $logger->info("Cloning Moodle...");
+        $output->writeln("Cloning Moodle...");
         $cloner = new MoodleCloneProvider();
         $clone = $cloner->cloneMoodle();
 

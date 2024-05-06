@@ -9,8 +9,6 @@ use Symfony\Component\Process\Process;
 
 class MoodleClone
 {
-
-
     public function __construct(private readonly string $path)
     {
         assert(is_dir($this->path) && is_dir($this->path . '/.git') && file_exists($this->path . '/lib/components.json'));
@@ -38,7 +36,6 @@ class MoodleClone
     }
 
     public function clean(): void {
-        echo "Cleaning $this->path\n";
         (new Process(['git', 'reset', '--hard']))->setWorkingDirectory($this->path)->mustRun();
         (new Process(['git', 'clean', '-fdx']))->setWorkingDirectory($this->path)->mustRun();
     }

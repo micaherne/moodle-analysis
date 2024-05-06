@@ -5,6 +5,7 @@ namespace MoodleAnalysis\Component;
 use core_h5p\local\library\autoloader;
 use ReflectionMethod;
 use RuntimeException;
+use stdClass;
 
 /**
  * Loads the core component class from Moodle.
@@ -245,6 +246,19 @@ final class CoreComponentBridge
             }
         }
 
+    }
+
+    /**
+     * Get the Moodle config object.
+     *
+     * This is to avoid calling code having to use globals, and prevent
+     * issues with static analysis.
+     *
+     * @return stdClass the Moodle $CFG object
+     */
+    public static function getConfig(): stdClass {
+        global $CFG;
+        return $CFG;
     }
 
     /**

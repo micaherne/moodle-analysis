@@ -3,7 +3,6 @@
 namespace MoodleAnalysis\Console\Command\Worker;
 
 use MoodleAnalysis\Component\CoreComponentBridge;
-use MoodlePhpstan\MoodleRootManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Process\Process;
@@ -28,13 +27,16 @@ class CheckClassloaderWorker
 
         foreach (array_keys(CoreComponentBridge::getClassMap()) as $class) {
             if (!class_exists($class)) {
+                // We know that there are hundreds of classes in the core_component
+                // class map that do not actually exist. We just need to ensure that
+                // all the existing ones can be loaded without failures.
                 $logger->debug("Class $class not found in the class map");
             }
         }
 
         foreach (CoreComponentBridge::getClassMapRenames() as $class) {
             if (!class_exists($class)) {
-                $logger->debug("Aliased class $class not found in the class map");
+                $logger->warning("Aliased class $class not found in the class map");
             }
         }
 
