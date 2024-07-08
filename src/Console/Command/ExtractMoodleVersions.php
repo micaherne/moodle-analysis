@@ -24,7 +24,7 @@ class ExtractMoodleVersions extends Command
     }
     #[\Override] protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $output->writeln('Extracting renamed classes from Moodle...');
+        $output->writeln('Extracting version map from Moodle...');
 
         $clone = $this->cloner->cloneMoodle();
 
