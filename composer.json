@@ -40,5 +40,8 @@
     "phpstan": "vendor/bin/phpstan analyse",
     "rector": "vendor/bin/rector process",
     "tests": "vendor/bin/phpunit tests"
-  }
+  },
+  "bin": [
+    "bin/moodle-analysis"
+  ]
 }
