@@ -17,7 +17,7 @@ class MoodleCloneProvider
         }
     }
 
-    public function cloneMoodle(): MoodleClone
+    public function cloneMoodle(bool $bare = false): MoodleClone
     {
 
         $fs = new Filesystem();
@@ -26,11 +26,18 @@ class MoodleCloneProvider
         $tempDir = $fs->tempnam(sys_get_temp_dir(), 'moodle-analysis');
         $fs->remove($tempDir);
 
+        $command = ['git', 'clone'];
+        if ($bare) {
+            $command[] = '--bare';
+        }
+        $command[] = 'git://git.moodle.org/moodle.git';
+        $command[] = $tempDir;
+
         $process = new Process(
-            ['git', 'clone', 'git://git.moodle.org/moodle.git', $tempDir]
+            $command
         );
 
-        $process->setTimeout(300)->mustRun();
+        $process->setTimeout(600)->mustRun();
 
         return $this->getClone($tempDir);
     }
