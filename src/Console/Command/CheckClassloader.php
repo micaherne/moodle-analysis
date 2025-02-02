@@ -4,12 +4,14 @@ namespace MoodleAnalysis\Console\Command;
 
 use Composer\Semver\Comparator;
 use Composer\Semver\VersionParser;
+use MoodleAnalysis\Codebase\MoodleClone;
 use MoodleAnalysis\Codebase\MoodleCloneProvider;
 use MoodleAnalysis\Console\Command\Worker\CheckClassloaderWorker;
 use MoodleAnalysis\Console\Process\ProcessUtil;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Helper\ProcessHelper;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,14 +26,17 @@ use Symfony\Component\Process\Process;
 )]
 class CheckClassloader extends Command
 {
-    #[\Override] protected function configure(): void
+    #[\Override]
+    protected function configure(): void
     {
         $this->addArgument('moodle-repo', InputArgument::OPTIONAL, 'The path to the Moodle repository')
+            ->addArgument('tag', InputArgument::OPTIONAL, 'The tag being analysed')
             ->addOption('worker', 'w', InputOption::VALUE_NONE, 'Run as worker');
     }
 
 
-    #[\Override] protected function execute(InputInterface $input, OutputInterface $output): int
+    #[\Override]
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $logger = new ConsoleLogger($output);
         $isWorker = (bool) $input->getOption('worker');
@@ -39,17 +44,24 @@ class CheckClassloader extends Command
             return $this->executeWorker($input, $logger);
         }
 
-        // Ensure git and composer are installed in the path.
-        /*if (exec('git --version') !== 0 || exec('composer --version') !== 0) {
-            $output->writeln("Please ensure git and composer are installed and in the path.");
-            return Command::FAILURE;
-        }*/
+        $repoLocation = $input->getArgument('moodle-repo');
 
-        $output->writeln("Cloning Moodle...");
-        $cloner = new MoodleCloneProvider();
-        $clone = $cloner->cloneMoodle();
+        if ($repoLocation === null) {
+            $output->writeln("Cloning Moodle...");
+            $cloner = new MoodleCloneProvider();
+            $clone = $cloner->cloneMoodle();
+        } else {
+            $realRepoLocation = realpath($repoLocation);
+            if ($realRepoLocation === false) {
+                throw new InvalidArgumentException("$realRepoLocation does not exist");
+            }
+            if (!MoodleClone::isStandardClone($realRepoLocation)) {
+                throw new InvalidArgumentException("Existing repo must be a full checkout clone of Moodle");
+            }
+            $clone = new MoodleClone($realRepoLocation);
+        }
 
-        $earliestTagOfInterest = 'v4.1.0';
+        $earliestTagOfInterest = 'v4.2.0';
 
         $tags = $clone->getTags();
 
@@ -69,12 +81,15 @@ class CheckClassloader extends Command
 
             /** @var ProcessHelper $processHelper */
             $processHelper = $this->getHelper('process');
+            $inputArguments = $input->getArguments();
 
             $commandParts = [
                 ...ProcessUtil::getPhpCommand(),
-                ...$_SERVER['argv'],
+                $_SERVER['argv'][0],
+                $inputArguments['command'],
                 '--worker',
-                $clone->getPath()
+                $clone->getPath(),
+                $tag
             ];
 
             $output->writeln("Checking $tag");
@@ -83,7 +98,9 @@ class CheckClassloader extends Command
             $output->writeln($process->getOutput());
         }
 
-        $clone->delete();
+        if ($repoLocation === null) {
+            $clone->delete();
+        }
 
         return Command::SUCCESS;
     }
@@ -91,13 +108,14 @@ class CheckClassloader extends Command
     private function executeWorker(InputInterface $input, LoggerInterface $logger): int
     {
         $repoLocation = $input->getArgument('moodle-repo');
+        $tag = $input->getArgument('tag');
 
         if (!is_dir($repoLocation)) {
             throw new \InvalidArgumentException('The Moodle repository does not exist');
         }
 
         $worker = new CheckClassloaderWorker();
-        return $worker->run($repoLocation, $logger);
+        return $worker->run($repoLocation, $logger, $tag);
     }
 
 

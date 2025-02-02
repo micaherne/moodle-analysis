@@ -38,13 +38,10 @@ class ExtractMoodleVersions extends Command
         define('MOODLE_INTERNAL', 1);
         define('MATURITY_STABLE', 'stable');
 
-        $tags = $clone->getTags();
-
-        $filteredTags = array_filter($tags, fn($tag): bool => Comparator::greaterThanOrEqualTo($tag, $earliestTagOfInterest)
-            && VersionParser::parseStability($tag) === 'stable');
+        $tags = $clone->getTags(from: $earliestTagOfInterest, stableOnly: true);
 
         $versions = [];
-        foreach ($filteredTags as $tag) {
+        foreach ($tags as $tag) {
             $output->writeln("Checking out $tag");
             $clone->clean();
             $clone->checkout($tag);

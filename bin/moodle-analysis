@@ -1,7 +1,9 @@
 #!/usr/bin/env php
 <?php
 
+use MoodleAnalysis\Analyse\Provider\MainAnalysisProvider;
 use MoodleAnalysis\Codebase\MoodleCloneProvider;
+use MoodleAnalysis\Console\Command\AnalyseCodebase;
 use MoodleAnalysis\Console\Command\CheckClassloader;
 use MoodleAnalysis\Console\Command\ExtractMoodleVersions;
 use MoodleAnalysis\Console\Command\GenerateClassloaderBootstrap;
@@ -14,8 +16,10 @@ if (isset($GLOBALS['_composer_autoload_path'])) {
 }
 
 $moodleCloneProvider = new MoodleCloneProvider();
+$mainAnalysisProvider = new MainAnalysisProvider();
 $app = new Application('Extract', '0.1');
 $app->addCommands([
+        new AnalyseCodebase($moodleCloneProvider, $mainAnalysisProvider),
     new ExtractMoodleVersions($moodleCloneProvider),
     new GenerateClassloaderBootstrap(),
     new CheckClassloader(),
