@@ -4,6 +4,8 @@ namespace MoodleAnalysis\Console\Command;
 
 use Fidry\CpuCoreCounter\CpuCoreCounter;
 use MoodleAnalysis\Analyse\ParallelAnalyser;
+use MoodleAnalysis\Analyse\Provider\MainAnalysisProvider;
+use MoodleAnalysis\Codebase\MoodleClone;
 use MoodleAnalysis\Codebase\MoodleCloneProvider;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -20,7 +22,7 @@ use function React\Async\await;
 )]
 class AnalyseCodebase extends Command
 {
-    public function __construct(private readonly MoodleCloneProvider $cloner, ?string $name = null)
+    public function __construct(private readonly MoodleCloneProvider $cloner, private readonly MainAnalysisProvider $analysisProvider, ?string $name = null)
     {
         parent::__construct($name);
     }
@@ -28,19 +30,31 @@ class AnalyseCodebase extends Command
 
     protected function configure()
     {
-        $this->addArgument('earliest-tag', InputArgument::REQUIRED, 'The earliest tag to start from');
+        $this->addArgument('earliest-tag', InputArgument::REQUIRED, 'The earliest tag to start from')
+            ->addArgument('moodle-repo-path', InputArgument::OPTIONAL, 'The path to an existing Moodle repository clone (full or bare)', null);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $earliestTag = $input->getArgument('earliest-tag');
+        $moodleRepoPath = $input->getArgument('moodle-repo-path');
+
+        if ($moodleRepoPath === null) {
+            $output->writeln("Cloning Moodle");
+            $clone = $this->cloner->cloneMoodle(bare: true);
+
+            $moodleRoot = $clone->getPath();
+        } else {
+            if (MoodleClone::isClone($moodleRepoPath)) {
+                $moodleRoot = $moodleRepoPath;
+                $clone = new MoodleClone($moodleRoot);
+            } else {
+                $output->writeln("The path provided is not a Moodle clone");
+                return Command::FAILURE;
+            }
+        }
 
         $libraryRoot = __DIR__ . '/../../../';
-
-        $output->writeln("Cloning Moodle");
-        $clone = $this->cloner->cloneMoodle(bare: true);
-
-        $moodleRoot = $clone->getPath();
 
         $cache = new FilesystemAdapter('blobs', 0, $libraryRoot . '/.analysis.cache/main');
 
@@ -53,16 +67,19 @@ class AnalyseCodebase extends Command
 
             $processingPromise = $analyser->startProcessing();
 
-            $processingPromise->then(function ($data) use ($tag, $libraryRoot, $output) {
-                $outputFile = $tag . '.json';
+            $processingPromise->then(function ($data) use ($tag, $output) {
+                $outputFile = $this->analysisProvider->getAnalysisFileForTag($tag);
                 $output->writeln("Writing {$outputFile}");
-                file_put_contents($libraryRoot . '/resources/main-analysis/' . $outputFile, json_encode($data, JSON_UNESCAPED_SLASHES));
+                file_put_contents($outputFile, json_encode($data, JSON_UNESCAPED_SLASHES));
             });
 
             await($processingPromise);
         }
 
-        $clone->delete();
+        if ($moodleRepoPath === null) {
+            $output->writeln("Deleting temporary clone");
+            $clone->delete();
+        }
 
         return Command::SUCCESS;
     }

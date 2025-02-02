@@ -4,12 +4,15 @@ namespace MoodleAnalysis\Console\Command;
 
 use Composer\Semver\Comparator;
 use Composer\Semver\VersionParser;
+use MoodleAnalysis\Analyse\Provider\MainAnalysisProvider;
+use MoodleAnalysis\Codebase\MoodleClone;
 use MoodleAnalysis\Codebase\MoodleCloneProvider;
 use MoodleAnalysis\Console\Command\Worker\GenerateClassloaderBootstrapWorker;
 use MoodleAnalysis\Console\Process\ProcessUtil;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Helper\ProcessHelper;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -28,7 +31,9 @@ class GenerateClassloaderBootstrap extends Command
     #[\Override] protected function configure(): void
     {
         $this->addArgument('moodle-repo', InputArgument::OPTIONAL, 'The path to the Moodle repository')
-            ->addArgument('output', InputArgument::OPTIONAL, 'The path to the output file')
+            // The tag argument will be the specific tag to analyse when --worker is passed.
+            ->addArgument('tag', InputArgument::OPTIONAL, 'The earliest tag to analyse')
+            ->addOption('fix-classloader', 'f', InputOption::VALUE_NONE, 'Fix the classloader before generating?')
             ->addOption('worker', 'w', InputOption::VALUE_NONE, 'Run as worker');
     }
 
@@ -36,7 +41,7 @@ class GenerateClassloaderBootstrap extends Command
     #[\Override] protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $logger = new ConsoleLogger($output);
-        $isWorker = (bool) $input->getOption('worker');
+        $isWorker = (bool)$input->getOption('worker');
         if ($isWorker) {
             return $this->executeWorker($input, $logger);
         }
@@ -47,23 +52,45 @@ class GenerateClassloaderBootstrap extends Command
             return Command::FAILURE;
         }*/
 
-        $output->writeln("Cloning Moodle...");
-        $cloner = new MoodleCloneProvider();
-        $clone = $cloner->cloneMoodle();
+        $repoLocation = $input->getArgument('moodle-repo');
 
-        $earliestTagOfInterest = 'v4.1.0';
+        if ($repoLocation === null) {
+            $output->writeln("Cloning Moodle...");
+            $cloner = new MoodleCloneProvider();
+            $clone = $cloner->cloneMoodle();
+        } else {
+            $realRepoLocation = realpath($repoLocation);
+            if ($realRepoLocation === false) {
+                throw new InvalidArgumentException("$realRepoLocation does not exist");
+            }
+            if (!MoodleClone::isStandardClone($realRepoLocation)) {
+                throw new InvalidArgumentException("Existing repo must be a full checkout clone of Moodle");
+            }
+            $clone = new MoodleClone($realRepoLocation);
+        }
+
+
+        $earliestTagOfInterest = $input->getArgument('tag') ?? 'v4.2.0';
 
         $fs = new Filesystem();
 
         $classloaderBootstrapDirectory = __DIR__ . '/../../../resources/bootstrap-classloader';
         $fs->mkdir($classloaderBootstrapDirectory);
 
-        $tags = $clone->getTags();
+        $tags = $clone->getTags(from: $earliestTagOfInterest, stableOnly: true);
 
-        $filteredTags = array_filter($tags, fn($tag): bool => Comparator::greaterThanOrEqualTo($tag, $earliestTagOfInterest)
-            && VersionParser::parseStability($tag) === 'stable');
+        // Check we have analysis for each tag, to avoid wasting time.
+        $analysisProvider = new MainAnalysisProvider();
+        foreach ($tags as $tag) {
+            if (!$analysisProvider->analysisExistsForTag($tag)) {
+                $output->writeln("Unable to find analysis for $tag. Please run analyse:codebase command.");
+                return Command::FAILURE;
+            }
+        }
 
-        foreach ($filteredTags as $tag) {
+        $inputArguments = $input->getArguments();
+
+        foreach ($tags as $tag) {
             $logger->info("Checking out $tag");
             $clone->clean();
             $clone->checkout($tag);
@@ -77,13 +104,22 @@ class GenerateClassloaderBootstrap extends Command
             /** @var ProcessHelper $processHelper */
             $processHelper = $this->getHelper('process');
 
+            // TODO: Pass verbosity flag through.
+
+            $fixClassloader = $input->getOption('fix-classloader');
+
             $commandParts = [
                 ...ProcessUtil::getPhpCommand(),
-                ...$_SERVER['argv'],
+                $_SERVER['argv'][0],
+                $inputArguments['command'],
                 '--worker',
                 $clone->getPath(),
-                "$classloaderBootstrapDirectory/$tag.php"
+                $tag
             ];
+
+            if ($fixClassloader) {
+                $commandParts[] = '-f';
+            }
 
             $logger->debug("Running worker for $tag");
             $process = $processHelper->run($output, new Process($commandParts, timeout: null));
@@ -91,7 +127,9 @@ class GenerateClassloaderBootstrap extends Command
             $output->writeln($process->getOutput());
         }
 
-        $clone->delete();
+        if ($repoLocation === null) {
+            $clone->delete();
+        }
 
         return Command::SUCCESS;
     }
@@ -99,18 +137,15 @@ class GenerateClassloaderBootstrap extends Command
     private function executeWorker(InputInterface $input, LoggerInterface $logger): int
     {
         $repoLocation = $input->getArgument('moodle-repo');
-        $outputFile = $input->getArgument('output');
+        $tag = $input->getArgument('tag');
+        $fixClassloader = $input->getOption('fix-classloader');
 
         if (!is_dir($repoLocation)) {
             throw new \InvalidArgumentException('The Moodle repository does not exist');
         }
 
-        if (!is_writable(dirname((string) $outputFile))) {
-            throw new \InvalidArgumentException('The output file is not writable');
-        }
-
         $worker = new GenerateClassloaderBootstrapWorker();
-        return $worker->run($repoLocation, $outputFile, $logger);
+        return $worker->run($repoLocation, $logger, $tag, $fixClassloader);
     }
 
 
