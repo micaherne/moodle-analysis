@@ -61,7 +61,10 @@ class ParallelAnalyser {
         if (!MoodleClone::isClone($this->moodleRoot)) {
             throw new InvalidArgumentException('Not a git repository');
         }
-        $this->moodleRoot = realpath($this->moodleRoot) || throw new InvalidArgumentException("Not a valid path");
+        $this->moodleRoot = realpath($this->moodleRoot);
+        if ($this->moodleRoot === false) {
+            throw new InvalidArgumentException("Not a valid path");
+        }
     }
 
     private function startServers(): void {
