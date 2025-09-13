@@ -2,29 +2,30 @@
 
 namespace MoodleAnalysis\Analyse;
 
+use Composer\Autoload\ClassLoader;
 use Generator;
+use MoodleAnalysis\Analyse\Analyser\SymbolsAnalyser;
 use MoodleAnalysis\Codebase\MoodleClone;
-use PhpParser\Node;
-use PhpParser\Node\Stmt\ClassLike;
-use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitor\FindingVisitor;
-use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\ParserFactory;
+use PhpParser\BuilderFactory;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Stmt\Expression;
+use PhpParser\PrettyPrinter\Standard;
 use React\Socket\ConnectionInterface;
 use React\Socket\SocketServer;
 use React\Socket\TcpConnector;
+use ReflectionClass;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Process\PhpProcess;
 use Symfony\Component\Process\Process;
 
-class ParallelAnalyserNew
+final readonly class ParallelAnalyserNew
 {
 
     private FilesystemAdapter $blobCache;
 
-    public function __construct(private MoodleClone $moodleClone, private string $blobCacheDir)
+    public function __construct(private MoodleClone $moodleClone, private string $cacheDir, private ?SymbolsAnalyser $analyser = null)
     {
-        $this->blobCache = new FilesystemAdapter(namespace: 'blobs', directory: $this->blobCacheDir);
+        $this->blobCache = new FilesystemAdapter(namespace: 'blobs', directory: $this->cacheDir);
     }
 
     public function startJobProvider(string $branch): Process
@@ -42,17 +43,20 @@ class ParallelAnalyserNew
 
     public function startAnalyser(string $jobProcessAddress)
     {
-        $php = $this->get_self_bootstrap_php() . ' echo $analyser->analyserWorker("' . $jobProcessAddress . '");';
+        $php = $this->get_self_bootstrap_php() . ' echo $analyser->analyserWorker(' . var_export($jobProcessAddress, true) . ');';
 
         $serverProc = new PhpProcess(
             script: $php,
             timeout: 0
         );
-        $serverProc->start();
+        $serverProc->start(function ($type, $data) {
+            if ($type === 'err') {
+                echo "$data\n";
+            }
+        });
         $serverProc->waitUntil(fn($type, $buffer) => str_contains($buffer, 'tcp://'));
         return $serverProc;
     }
-
 
 
     public function jobProviderWorker(string $branch): string
@@ -87,16 +91,12 @@ class ParallelAnalyserNew
 
     public function analyserWorker(string $jobProcessAddress)
     {
-        // Setup the parser etc.
-        $parser = (new ParserFactory())->createForNewestSupportedVersion();
-        $classFinder = new FindingVisitor(fn(Node $node) => $node instanceof ClassLike);
-        $traverser = new NodeTraverser(new NameResolver(), $classFinder);
 
         $socket = new SocketServer('127.0.0.1:0');
         $connector = new TcpConnector();
         $connector->connect($jobProcessAddress)
-            ->then(function (ConnectionInterface $connection) use ($socket, $connector, $parser, $traverser, $classFinder) {
-                $connection->on('data', function($data) use ($socket, $connection, $parser, $traverser, $classFinder) {
+            ->then(function (ConnectionInterface $connection) use ($socket, $connector) {
+                $connection->on('data', function ($data) use ($socket, $connection) {
                     $command = trim($data);
                     if ($command === '@END' || str_starts_with($command, '@ERROR')) {
                         $socket->close();
@@ -110,30 +110,22 @@ class ParallelAnalyserNew
                     $filePath = $json->filePath;
                     $blobId = $json->blobId;
 
-                    $classlikes = [];
+                    $result = null;
                     $cacheItem = $this->blobCache->getItem($blobId);
                     if ($cacheItem->isHit()) {
-                        $classlikes = $cacheItem->get();
+                        $result = $cacheItem->get();
                     } else {
                         $contentProc = new Process(['git', '-C', $this->moodleClone->getPath(), 'cat-file', 'blob', $json->blobId]);
                         $contentProc->mustRun();
                         $content = $contentProc->getOutput();
-                        $nodes = $parser->parse($content);
-                        $traverser->traverse($nodes);
 
-                        /** @var ClassLike $foundNode */
+                        $result = $this->analyser->analyse($content);
 
-                        foreach ($classFinder->getFoundNodes() as $foundNode) {
-                            if ($foundNode->namespacedName === null) {
-                                continue;
-                            }
-                            $classlikes[] = $foundNode->namespacedName->name;
-                        }
-                        $this->blobCache->save($cacheItem->set($classlikes));
+                        $this->blobCache->save($cacheItem->set($result));
                     }
 
                     $out = fopen('log.txt', 'a');
-                    fputcsv($out, [$filePath, $blobId, ...$classlikes]);
+                    fputcsv($out, [$filePath, $blobId, ...$result->classLikes, ...$result->functionLikes]);
                     fclose($out);
 
                     $connection->write("@JOB\n");
@@ -171,12 +163,23 @@ class ParallelAnalyserNew
     /**
      * @return string
      */
-    private function get_self_bootstrap_php(): string
+    public function get_self_bootstrap_php(): string
     {
-        $autoloaderPath = realpath(dirname(__DIR__, 2) . '/vendor/autoload.php');
-        return '<?php require_once "' . $autoloaderPath . '"; $clone = new ' . MoodleClone::class . '("' . $this->moodleClone->getPath(
-            ) . '");
-$analyser = new ' . __CLASS__ . '($clone, "' . var_export($this->blobCacheDir, true) . '");';
+
+        $classloader = new ReflectionClass(ClassLoader::class);
+        $vendorDir = dirname($classloader->getFileName(), 2);
+
+        $autoloaderPath = realpath($vendorDir . '/autoload.php');
+        $b = new BuilderFactory();
+        $stmts = [];
+        $stmts[] = new Expression($b->funcCall('require_once', [$autoloaderPath]));
+        $stmts[] = new Expression(new Assign($b->var('c'), $b->new(MoodleClone::class, [realpath($this->moodleClone->getPath())])));
+        $stmts[] = new Expression(new Assign($b->var('x'), $b->new(SymbolsAnalyser::class)));
+        $stmts[] = new Expression(new Assign($b->var('analyser'), $b->new(ParallelAnalyserNew::class, [$b->var('c'), $this->cacheDir, $b->var('x')])));
+
+        $prettyPrinter = new Standard();
+        return $prettyPrinter->prettyPrintFile($stmts);
+
     }
 
 
