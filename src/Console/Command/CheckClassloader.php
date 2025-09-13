@@ -29,8 +29,9 @@ class CheckClassloader extends Command
     #[\Override]
     protected function configure(): void
     {
-        $this->addArgument('moodle-repo', InputArgument::OPTIONAL, 'The path to the Moodle repository')
-            ->addArgument('tag', InputArgument::OPTIONAL, 'The tag being analysed')
+        $this->addArgument('tag', InputArgument::REQUIRED, 'The tag being analysed')
+            ->addArgument('moodle-repo', InputArgument::OPTIONAL, 'The path to the Moodle repository')
+            ->addOption('from', 'f', InputOption::VALUE_NONE, 'Check all tags from the given one?')
             ->addOption('worker', 'w', InputOption::VALUE_NONE, 'Run as worker');
     }
 
@@ -61,14 +62,21 @@ class CheckClassloader extends Command
             $clone = new MoodleClone($realRepoLocation);
         }
 
-        $earliestTagOfInterest = 'v4.2.0';
+        $tag = $input->getArgument('tag');
+        $from = (bool) $input->getOption('from');
 
-        $tags = $clone->getTags();
+        $tags = [];
+        if ($from) {
+            $allTags = $clone->getTags();
+            $earliestTagOfInterest = $tag;
 
-        $filteredTags = array_filter($tags, fn($tag): bool => Comparator::greaterThanOrEqualTo($tag, $earliestTagOfInterest)
-            && VersionParser::parseStability($tag) === 'stable');
+            $tags = array_filter($allTags, fn($tag): bool => Comparator::greaterThanOrEqualTo($tag, $earliestTagOfInterest)
+                && VersionParser::parseStability($tag) === 'stable');
+        } else {
+            $tags[] = $tag;
+        }
 
-        foreach ($filteredTags as $tag) {
+        foreach ($tags as $tag) {
             $logger->info("Checking out $tag");
             $clone->clean();
             $clone->checkout($tag);
@@ -88,8 +96,8 @@ class CheckClassloader extends Command
                 $_SERVER['argv'][0],
                 $inputArguments['command'],
                 '--worker',
+                $tag,
                 $clone->getPath(),
-                $tag
             ];
 
             $output->writeln("Checking $tag");
